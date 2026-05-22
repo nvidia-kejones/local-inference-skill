@@ -41,6 +41,7 @@ def main() -> None:
         "host": {
             "hostname": first_line(command_stdout(commands, "hostname_fqdn"))
             or raw.get("remote_hostname"),
+            "home_dir": first_line(command_stdout(commands, "home_dir")),
             "os": parse_os_release(command_stdout(commands, "os_release")),
             "kernel": command_stdout(commands, "kernel").strip(),
             "cpu": parse_lscpu(command_stdout(commands, "lscpu")),

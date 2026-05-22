@@ -48,6 +48,7 @@ commands = [
     ("kernel", ["uname", "-a"]),
     ("lscpu", ["lscpu"]),
     ("meminfo", ["cat", "/proc/meminfo"]),
+    ("home_dir", ["sh", "-lc", "printf %s \"$HOME\""]),
     ("disk", ["df", "-B1", "-P", "/", "/home", "/var/lib/docker", "/var/lib/containerd"]),
     ("nvidia_smi_table", ["nvidia-smi"]),
     ("nvidia_smi_list", ["nvidia-smi", "-L"]),

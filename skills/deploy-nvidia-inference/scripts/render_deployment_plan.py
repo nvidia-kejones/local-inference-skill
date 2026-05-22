@@ -110,6 +110,7 @@ def main() -> None:
         },
         "host_summary": {
             "hostname": nested(host, "host", "hostname", default=None),
+            "home_dir": nested(host, "host", "home_dir", default=None),
             "gpu_count": len(nested(host, "nvidia", "gpus", default=[]) or []),
             "driver_version": nested(host, "nvidia", "driver_version", default=None),
             "docker_available": nested(host, "containers", "docker", "available", default=False),
@@ -124,6 +125,10 @@ def main() -> None:
             "external_exposure_requested": bool(
                 nested(workload, "endpoint", "external_exposure", default=False)
             ),
+        },
+        "deployment_topology": {
+            "model_endpoint_count": deployment_endpoint_count(workload),
+            "shared_hf_cache_path": shared_hf_cache_path(host, workload),
         },
         "fit_estimate": fit,
         "pinning": pinning,
@@ -153,7 +158,7 @@ def main() -> None:
     }
 
     if runtime == "vllm":
-        rendered = render_vllm(args, workload, candidate, host_port)
+        rendered = render_vllm(args, host, workload, candidate, host_port)
         if args.compose_out:
             Path(args.compose_out).write_text(rendered["compose"], encoding="utf-8")
         if args.env_out:
@@ -168,6 +173,14 @@ def main() -> None:
             },
             "remote_dir": remote_dir,
         }
+        if deployment_endpoint_count(workload) > 1:
+            plan["commands"]["preflight"].append(
+                remote_exec_command(
+                    connection,
+                    f"umask 077 && mkdir -p {shlex.quote(shared_hf_cache_path(host, workload))} "
+                    f"&& chmod 700 {shlex.quote(shared_hf_cache_path(host, workload))}",
+                )
+            )
         plan["commands"]["apply"] = [
             "Review deployment_plan.yaml, rendered Compose, and environment files.",
             apply_command(args, remote_dir),
@@ -201,7 +214,11 @@ def main() -> None:
 
 
 def render_vllm(
-    args: argparse.Namespace, workload: dict[str, Any], candidate: dict[str, Any], host_port: int
+    args: argparse.Namespace,
+    host: dict[str, Any],
+    workload: dict[str, Any],
+    candidate: dict[str, Any],
+    host_port: int,
 ) -> dict[str, str]:
     template = (TEMPLATE_DIR / "docker-compose.vllm.yaml.tmpl").read_text(encoding="utf-8")
     env_template = (TEMPLATE_DIR / "vllm.deployment.env.tmpl").read_text(encoding="utf-8")
@@ -238,6 +255,7 @@ def render_vllm(
         "@@TENSOR_PARALLEL_SIZE@@": str(
             as_int(nested(candidate, "deployment", "tensor_parallel_size", default=1), 1)
         ),
+        "@@HF_CACHE@@": shared_hf_cache_path(host, workload),
     }
     for token, value in env_values.items():
         env_template = env_template.replace(token, env_escape(value))
@@ -273,6 +291,37 @@ def apply_blockers(runtime: str, pinning: dict[str, Any]) -> list[str]:
     if runtime != "vllm":
         blockers.append("runtime apply module is not implemented in v1; use reviewed manual commands")
     return blockers
+
+
+def deployment_endpoint_count(workload: dict[str, Any]) -> int:
+    candidates = [
+        nested(workload, "deployment", "endpoint_count", default=0),
+        nested(workload, "deployment", "model_endpoint_count", default=0),
+        nested(workload, "deployment", "service_count", default=0),
+    ]
+    for value in candidates:
+        count = as_int(value, 0)
+        if count > 0:
+            return count
+    for key in ("endpoints", "model_endpoints", "services"):
+        entries = nested(workload, "deployment", key, default=None)
+        if isinstance(entries, list) and entries:
+            return len(entries)
+    return 1
+
+
+def shared_hf_cache_path(host: dict[str, Any], workload: dict[str, Any]) -> str:
+    if deployment_endpoint_count(workload) <= 1:
+        return "./hf-cache"
+    home_dir = str(nested(host, "host", "home_dir", default="") or "").strip()
+    if home_dir:
+        return f"{home_dir.rstrip('/')}/.cache/huggingface"
+    remote_user = str(nested(host, "source", "remote_user", default="") or "").strip()
+    if remote_user == "root":
+        return "/root/.cache/huggingface"
+    if remote_user:
+        return f"/home/{remote_user}/.cache/huggingface"
+    return "/var/lib/huggingface-cache"
 
 
 def slug(value: str) -> str:

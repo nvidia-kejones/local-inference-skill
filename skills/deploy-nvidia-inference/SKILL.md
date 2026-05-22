@@ -12,6 +12,7 @@ Use this skill as a staged remote-deployment workflow. Keep host facts, workload
 - Keep discovery read-only. Use `scripts/probe_remote_host.sh` and `scripts/normalize_host_facts.py` before any install, write, service change, firewall change, or model download.
 - Treat every deployment write as an explicit apply action. The v1 scripted apply path is the vLLM Docker Compose baseline and it requires apply/download flags.
 - Bind endpoints to `127.0.0.1` by default. Add external exposure only after the user asks for it and the plan records the reverse proxy, authentication, firewall, and rollback implications.
+- When a deployment contains more than one model endpoint, prefer a shared host Hugging Face cache path for all services and record that path in the plan and applied state.
 - Prefer an OpenAI-compatible endpoint contract when the selected runtime provides one.
 - Do not rank candidates from memory. Refresh model support, runtime support, quantization support, and license/deployment constraints from primary docs and model repos before pinning a candidate set.
 - Preserve rollback guidance before replacing an existing inference service. Record commands, image/model revisions, rendered configuration, and verification commands.

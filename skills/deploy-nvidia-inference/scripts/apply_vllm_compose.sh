@@ -117,12 +117,16 @@ fi
 remote_exec "umask 077 && mkdir -p '$remote_dir' && chmod 700 '$remote_dir'"
 remote_copy "$compose_file" "$remote_compose"
 remote_copy "$env_file" "$remote_env"
+hf_cache_path=$(awk -F= '$1=="HF_CACHE"{print substr($0, length($1)+2); exit}' "$env_file")
+if [[ -n "${hf_cache_path:-}" && "$hf_cache_path" == /* ]]; then
+  remote_exec "umask 077 && mkdir -p '$hf_cache_path' && chmod 700 '$hf_cache_path'"
+fi
 remote_exec "chmod 600 '$remote_compose' '$remote_env'"
 remote_exec "docker compose --env-file '$remote_env' -f '$remote_compose' config >/dev/null"
 remote_exec "docker compose --env-file '$remote_env' -f '$remote_compose' up -d"
 compose_ps=$(remote_exec "docker compose --env-file '$remote_env' -f '$remote_compose' ps")
 
-python3 - "$state_out" "$compose_file" "$env_file" "$replace_existing" "$remote_dir" "$remote_compose" "$remote_env" "$compose_ps" <<'PY'
+python3 - "$state_out" "$compose_file" "$env_file" "$replace_existing" "$remote_dir" "$remote_compose" "$remote_env" "$compose_ps" "${hf_cache_path:-}" <<'PY'
 from __future__ import annotations
 
 import datetime as dt
@@ -130,7 +134,7 @@ import json
 import shlex
 import sys
 
-state_out, compose_file, env_file, replace_existing, remote_dir, remote_compose, remote_env, compose_ps = sys.argv[1:]
+state_out, compose_file, env_file, replace_existing, remote_dir, remote_compose, remote_env, compose_ps, hf_cache_path = sys.argv[1:]
 state = {
     "schema_version": "nvidia-applied-deployment-state/v1",
     "applied_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -145,12 +149,15 @@ state = {
         "remote mkdir",
         "remote copy compose",
         "remote copy env",
+        "remote mkdir shared hf cache" if hf_cache_path else "shared hf cache not requested",
         "docker compose config",
         "docker compose up -d",
     ],
     "remote_compose_ps": compose_ps,
     "rollback_command": f"docker compose --env-file {shlex.quote(remote_env)} -f {shlex.quote(remote_compose)} down",
 }
+if hf_cache_path:
+    state["shared_hf_cache_path"] = hf_cache_path
 with open(state_out, "w", encoding="utf-8") as handle:
     json.dump(state, handle, indent=2, sort_keys=True)
     handle.write("\n")
