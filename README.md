@@ -42,6 +42,23 @@ npx skills add https://github.com/nvidia-kejones/local-inference.git --list
 
 The skill lives under `skills/deploy-nvidia-inference`, which is a standard `skills` CLI discovery path. Use `--agent <agent>` when the target agent is known, and add `--global` for a user-level install instead of a project install.
 
+## Upgrade
+
+Refresh an installed copy after pulling new changes from this repo:
+
+```bash
+npx skills update
+```
+
+Use scope flags when you want to limit the refresh to a specific install scope:
+
+```bash
+npx skills update -g
+npx skills update -p
+```
+
+If you installed from a local clone, update the clone first and then rerun `npx skills update` from the same project or global context.
+
 ## Use
 
 Ask the agent to use the skill with a concrete host and goal:
