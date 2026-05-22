@@ -1,0 +1,16 @@
+# Per-run skill outputs can include host inventory and deployment evidence.
+/outputs/*
+!/outputs/.gitkeep
+
+# Ignore legacy root-level outputs from direct skill runs.
+/applied_deployment_state.json
+/benchmark_report.json
+/candidate_scorecard.json
+/candidate_set.json
+/deployment_plan.yaml
+/host_facts.json
+/host_probe.raw.json
+/use_case_profiles.json
+/use_case_recommendations.json
+/verification_report.json
+/workload_profile.yaml

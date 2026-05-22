@@ -104,15 +104,18 @@ Use $deploy-nvidia-inference to discover user@gpu-host over SSH and recommend th
 
 The skill keeps recommendation and deployment state separate. During use it aims to produce:
 
-- `host_facts.json`
-- `workload_profile.yaml`
-- `candidate_scorecard.json`
-- `use_case_recommendations.json` when comparing named workload profiles
-- `deployment_plan.yaml`
-- `applied_deployment_state.json` only after explicit apply
-- `verification_report.json`
+- `outputs/deploy-nvidia-inference/<run-id>/host_probe.raw.json`
+- `outputs/deploy-nvidia-inference/<run-id>/host_facts.json`
+- `outputs/deploy-nvidia-inference/<run-id>/workload_profile.yaml`
+- `outputs/deploy-nvidia-inference/<run-id>/candidate_set.json`
+- `outputs/deploy-nvidia-inference/<run-id>/candidate_scorecard.json`
+- `outputs/deploy-nvidia-inference/<run-id>/use_case_profiles.json` when comparing named workload profiles
+- `outputs/deploy-nvidia-inference/<run-id>/use_case_recommendations.json` when comparing named workload profiles
+- `outputs/deploy-nvidia-inference/<run-id>/deployment_plan.yaml`
+- `outputs/deploy-nvidia-inference/<run-id>/applied_deployment_state.json` only after explicit apply
+- `outputs/deploy-nvidia-inference/<run-id>/verification_report.json`
 
-Discovery is read-only. Installs, model downloads, service changes, deployment writes, firewall changes, and endpoint exposure must be explicit apply decisions. Endpoints bind to `127.0.0.1` by default unless external exposure is requested and reviewed.
+Each run directory should keep its raw probe, workload assumptions, candidate set, recommendation outputs, rendered plan, and verification reports together. `outputs/` is gitignored because those files can carry host inventory and deployment evidence. Discovery is read-only. Installs, model downloads, service changes, deployment writes, firewall changes, and endpoint exposure must be explicit apply decisions. Endpoints bind to `127.0.0.1` by default unless external exposure is requested and reviewed.
 
 ## Direct Script Flow
 
@@ -120,13 +123,16 @@ The skill normally drives these helpers, but the core read-only path can also be
 
 ```bash
 cd skills/deploy-nvidia-inference
-scripts/probe_remote_host.sh user@gpu-host > host_probe.raw.json
-python3 scripts/normalize_host_facts.py host_probe.raw.json --out host_facts.json
+run_dir=../../outputs/deploy-nvidia-inference/$(date -u +%Y%m%dT%H%M%SZ)-gpu-host
+mkdir -p "$run_dir"
+scripts/probe_remote_host.sh user@gpu-host > "$run_dir/host_probe.raw.json"
+python3 scripts/normalize_host_facts.py "$run_dir/host_probe.raw.json" \
+  --out "$run_dir/host_facts.json"
 python3 scripts/recommend_use_cases.py \
-  --host host_facts.json \
+  --host "$run_dir/host_facts.json" \
   --profiles assets/use_case_profiles.example.json \
-  --candidates candidate_set.json \
-  --out use_case_recommendations.json
+  --candidates "$run_dir/candidate_set.json" \
+  --out "$run_dir/use_case_recommendations.json"
 ```
 
-Build `candidate_set.json` from current primary runtime/model documentation and model metadata before scoring. The bundled candidate examples are schemas and test shapes, not permanent model recommendations.
+Build each run's `candidate_set.json` from current primary runtime/model documentation and model metadata before scoring. The bundled candidate examples are schemas and test shapes, not permanent model recommendations.

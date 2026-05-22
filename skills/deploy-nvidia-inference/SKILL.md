@@ -5,7 +5,7 @@ description: Discover a single remote NVIDIA Linux host over SSH, build refresha
 
 # Deploy NVIDIA Inference
 
-Use this skill as a staged remote-deployment workflow. Keep host facts, workload intent, recommendations, applied state, and verification results in separate artifacts so later agents can audit assumptions against what was actually changed.
+Use this skill as a staged remote-deployment workflow. Keep host facts, workload intent, recommendations, applied state, and verification results in separate artifacts so later agents can audit assumptions against what was actually changed. Unless the user chooses paths, create one run directory such as `outputs/deploy-nvidia-inference/<timestamp>-<host>/` in the current workspace and keep generated artifacts for that run there.
 
 ## Guardrails
 
@@ -18,32 +18,35 @@ Use this skill as a staged remote-deployment workflow. Keep host facts, workload
 
 ## Workflow
 
-1. Capture intent in `workload_profile.yaml`.
+1. Capture intent in `<run-dir>/workload_profile.yaml`.
    Start from `assets/workload_profile.example.yaml`. Record context length, expected concurrent sequences, batching/live-token expectations, serving patterns, endpoint exposure, quality/latency priorities, and license constraints.
 2. Discover the host without changing it.
-   Run `scripts/probe_remote_host.sh <ssh-target> > host_probe.raw.json`, then `python3 scripts/normalize_host_facts.py host_probe.raw.json --out host_facts.json`.
+   Run `scripts/probe_remote_host.sh <ssh-target> > <run-dir>/host_probe.raw.json`, then `python3 scripts/normalize_host_facts.py <run-dir>/host_probe.raw.json --out <run-dir>/host_facts.json`.
 3. Refresh the recommendation basis.
    Read [runtime-selection.md](references/runtime-selection.md), [host-discovery.md](references/host-discovery.md), and [model-fit.md](references/model-fit.md). Read only the runtime reference files relevant to the candidate set you are building.
 4. Build and score candidate model/runtime pairs.
-   Create a candidate file from current primary docs and model metadata rather than a permanent "latest models" list. Use `python3 scripts/rank_candidates.py --host host_facts.json --workload workload_profile.yaml --candidates candidate_set.json --out candidate_scorecard.json` for one workload, or `python3 scripts/recommend_use_cases.py --host host_facts.json --profiles use_case_profiles.json --candidates candidate_set.json --out use_case_recommendations.json` when the user wants host-aware recommendations across use cases.
+   Create a candidate file from current primary docs and model metadata rather than a permanent "latest models" list. Use `python3 scripts/rank_candidates.py --host <run-dir>/host_facts.json --workload <run-dir>/workload_profile.yaml --candidates <run-dir>/candidate_set.json --out <run-dir>/candidate_scorecard.json` for one workload, or `python3 scripts/recommend_use_cases.py --host <run-dir>/host_facts.json --profiles <run-dir>/use_case_profiles.json --candidates <run-dir>/candidate_set.json --out <run-dir>/use_case_recommendations.json` when the user wants host-aware recommendations across use cases.
 5. Inspect fit estimates before recommending apply.
    Use `scripts/estimate_model_fit.py` on the winning candidate when fit is tight, KV-cache metadata is uncertain, GPU topology is awkward, MIG is active, or the runtime needs a non-default quantization path.
 6. Render a deployment plan.
-   Use `scripts/render_deployment_plan.py` to produce `deployment_plan.yaml`. For v1 it can also render the vLLM Compose and environment files. For SGLang, TensorRT-LLM, llama.cpp, and Ollama it emits a bounded follow-on module contract instead of pretending the deployer is implemented.
+   Use `scripts/render_deployment_plan.py` to produce `<run-dir>/deployment_plan.yaml`. For v1 it can also render the vLLM Compose and environment files in the run directory. For SGLang, TensorRT-LLM, llama.cpp, and Ollama it emits a bounded follow-on module contract instead of pretending the deployer is implemented.
 7. Apply only after the plan is acceptable.
    Use `scripts/apply_vllm_compose.sh --apply --allow-model-downloads ...` for the baseline vLLM Compose module, or execute reviewed plan commands for a documented manual runtime path.
 8. Verify and benchmark.
-   Use `scripts/smoke_test_endpoint.py` for endpoint verification and `scripts/benchmark_endpoint.py` with an explicit profile before claiming the deployment performs well for the workload. For authenticated endpoints, prefer `--api-key-env` over placing tokens in command arguments.
+   Use `scripts/smoke_test_endpoint.py` for endpoint verification and `scripts/benchmark_endpoint.py` with an explicit profile before claiming the deployment performs well for the workload. Write reports into the run directory. For authenticated endpoints, prefer `--api-key-env` over placing tokens in command arguments.
 
 ## Artifact Contract
 
-- `host_facts.json`: normalized read-only host discovery facts and evidence.
-- `workload_profile.yaml`: user/workload intent, not discovered host state.
-- `candidate_scorecard.json`: scored model/runtime recommendations with fit estimates and blockers.
-- `use_case_recommendations.json`: host-aware recommendation matrix across named workload profiles.
-- `deployment_plan.yaml`: planned configuration, apply/verify commands, pinning state, and rollback guidance.
-- `applied_deployment_state.json`: state recorded by an explicit apply path.
-- `verification_report.json`: endpoint smoke-test results; keep benchmark reports beside it or merge them deliberately.
+- `<run-dir>/host_probe.raw.json`: raw read-only SSH probe evidence; protect it as host inventory.
+- `<run-dir>/host_facts.json`: normalized read-only host discovery facts and evidence.
+- `<run-dir>/workload_profile.yaml`: user/workload intent, not discovered host state.
+- `<run-dir>/candidate_set.json`: refreshed model/runtime candidates and source notes for the run.
+- `<run-dir>/candidate_scorecard.json`: scored model/runtime recommendations with fit estimates and blockers.
+- `<run-dir>/use_case_profiles.json`: workload profiles used for a named use-case recommendation matrix.
+- `<run-dir>/use_case_recommendations.json`: host-aware recommendation matrix across named workload profiles.
+- `<run-dir>/deployment_plan.yaml`: planned configuration, apply/verify commands, pinning state, and rollback guidance.
+- `<run-dir>/applied_deployment_state.json`: state recorded by an explicit apply path.
+- `<run-dir>/verification_report.json`: endpoint smoke-test results; keep benchmark reports beside it or merge them deliberately.
 
 Never overwrite one artifact with another category of state.
 
