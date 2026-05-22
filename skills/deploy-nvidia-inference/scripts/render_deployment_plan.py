@@ -138,6 +138,10 @@ def main() -> None:
             "preflight": [
                 remote_exec_command(connection, "nvidia-smi -L"),
                 remote_exec_command(connection, "docker compose version"),
+                remote_exec_command(
+                    connection,
+                    f"docker pull {shlex.quote(str(nested(candidate, 'deployment', 'container_image', default='vllm/vllm-openai:latest')))}",
+                ),
                 remote_exec_command(connection, f"ss -H -ltn | grep :{host_port} || true"),
             ],
             "verify": [
